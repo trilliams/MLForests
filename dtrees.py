@@ -1,3 +1,6 @@
+from random import choice
+from numpy import mean,median
+
 class Tree:
     def __init__(self):
         self.n = 0
@@ -62,6 +65,37 @@ class Node:
     def __len__(self):
         #count
         return (not self.leaf)*len(self.children)
+
+class Bootstrap:
+    def __init__(self,sample):
+        N = 1000
+        n = len(sample)
+        self.bootstraps = []
+        for i in range(N):
+            self.bootstraps.append([choice(sample) for i in range(n)])
+
+    def __len__(self):
+        return len(self.bootstraps)
+
+    def __repr__(self):
+        return '%i bootstraps of %i samples' %\
+               (len(self.bootstraps),len(self.bootstraps[0]))
+
+    def size(self):
+        print len(self.bootstraps),'bootstraps of',\
+              len(self.bootstraps[0]),'samples'
+
+    def mean(self):
+        means = [mean(self.bootstraps[i]) for i \
+                 in range(len(self.bootstraps))]
+        return means
+    
+    def median(self):
+        medians = [mean(self.bootstraps[i]) for \
+                   i in range(len(self.bootstraps))]
+        return medians
+
+
         
 
     
