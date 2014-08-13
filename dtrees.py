@@ -10,9 +10,12 @@ class Tree:
         self.leaves = {}
         #dictionary for determining numeric classifiers
         self.num = {}
+        self.attributes = []
 
     def addnode(self,Node,index=n):
         Node.index = index
+        if Node.attribute not in self.attributes:
+            self.attributes.append(Node.attribute)
         self.n += 1
         self.newnodes = []
         if Node.leaf:

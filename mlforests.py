@@ -173,7 +173,20 @@ def treebuilder(sample,attributes,target):
     print '(A single entry indicates a classifying node and its value)'
     for i in t.nodes.keys():
         print '%i: %s' % (i,t.nodes[i])
-    return t            
+    trainscore = treescore(t,sample,target)
+    print 'Tree correctly predicts %.4f of training set.' % trainscore
+    return t
+
+def treescore(Tree,sample,target):
+    x=sample.dropna(subset=Tree.attributes)
+    #x=titanic
+    len(x)
+    answers=[]
+    solutions=[]
+    for i in x.index:
+        answers.append(tree.classify(titanic.ix[i]))
+        solutions.append(sample[target].ix[i])
+    return score(answers,solutions)
     
 
 def postprune(Tree,validationsample):
