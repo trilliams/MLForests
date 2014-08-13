@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import random
 import matplotlib.pyplot as plt
-from math import log
+import math
 
 def bootstrapmean(sample,trials=1000,samplesize=10):
     from numpy import mean
@@ -22,14 +22,15 @@ def bootstrapmedian(sample,trials=1000,samplesize=10):
 
 def entropy(sample,attribute,labels):
     total=0.0
+    #implement fractional entropy, expected value
     for i in labels:
         #THIS WILL NOT WORK, IT IS ONLY RIGHT IN PRINCIPLE
         #MIGHT WORK NOW
-        p = sample[sample[attribute] == labels[i]]
+        p = len(sample[sample[attribute] == labels[i]])
         if p == 0:
             total -= 0
         else:
-            total -= len(p)*log(len(p),2)
+            total -= p*math.log(p,2)
     return total
 
 def score(guess,truth):
@@ -40,34 +41,28 @@ def score(guess,truth):
             right += 1
     return float(right)/total
 
-def binumsplit(values):
+def binumsplit(sample, values, target):
     #This only allows splitting of number continuums on one value
     #May develop trinumericsplit later or perhaps a general numeric split
     #Idea for trinumeric: iteratively move through options, only checking
     #higher options at each point.
     #Just evaluate on unique values
-    try values[0]:
-        continue
-    except IndexError:
-        return 'not a list of values'
-    #this next line is wrong
-    except ValueError:
-        return 'not numeric'
+    
     numbers = list(set(values))
     numbers.sort()
     #Want the midpoints of each of these values
-    choices = [(i,float(number[i] + number[i+1])/2) for i in range(len(numbers)-1)]
+    choices = [(i,float(numbers[i] + numbers[i+1])/2) for i in range(len(numbers)-1)]
     index = -1
     minentropy = 1
-    for i,number in options:
-        p = len(filter(lambda x: x <= number),numbers)
+    for i,number in choices:
+        p = len(filter(lambda x: x <= number,numbers))
         q = len(numbers)-p
         if p == 0:
-            total = -q*log(q,2)
+            total = -q*math.log(q,2)
         elif q == 0:
-            total = -p*log(p,2)
+            total = -p*math.log(p,2)
         else:
-            total = -p*log(p,2)-q*log(q,2)
+            total = -p*math.log(p,2)-q*log(q,2)
         if total <= minentropy:
             index = number
             minentropy = total
@@ -91,13 +86,13 @@ def nodebuilder(sample,attributes,target):
         #probabilistically assign target value as leaf classifier
         label = problabel(sample,target)
         return Node(target,label)
-    elif len(set(sample['target'])) == 1:
+    elif len(set(sample[target])) == 1:
         #return leaf with classifier as this target value
-        label = sample['target'][0]
+        label = sample[target][0]
         return Node(target,label)
     else:
         #time to build a node the old fashioned way
-        bestattribute,minentropy,value = igfinder(attributes)
+        bestattribute,minentropy,value = igfinder(sample,attributes,target)
         #not currently using entropy
         if value!=None:
             return Node(bestattribute,value,True)
@@ -113,7 +108,6 @@ def noderecurse(Tree,Node,attributes,target):
                                 newattributes,target)
             Tree.addnode(x,Node.index)
             noderecurse(Tree,x,newattributes,target)
-    else: break
 
 
 def treebuilder(sample,attributes,target):
@@ -152,11 +146,13 @@ def problabel(sample,target):
 def igfinder(sample,attributes,target):
     minindex = -1
     minentropy = 1
+    #placeholder
+    bestattribute = attributes[0]
     for i,attribute in enumerate(attributes):
-        if type(sample[attribute][0])==float or type(sample[attribute][0])==int):
-            newentropy,value = binumsplit(sample,attribute,target)
+        if type(sample[attribute][0])!= str:
+            newentropy,value = binumsplit(sample,set(sample[attribute]),target)
         else:
-            newentropy = entropy(sample[attribute],set(sample[attribute]))
+            newentropy = entropy(sample[attribute],attribute,set(sample[attribute]))
         if newentropy < minentropy:
             minindex = i
             minentropy = newentropy
