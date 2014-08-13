@@ -4,27 +4,32 @@ from numpy import mean,median
 class Tree:
     def __init__(self):
         self.n = 0
+        #dictionary for node attributes
         self.nodes = {}
+        #dictionary for finding leaves
         self.leaves = {}
+        #dictionary for determining numeric classifiers
+        self.num = {}
 
-    def addnode(self,Node,parentindex):
-        Node.index = self.n
+    def addnode(self,Node,index=n):
+        Node.index = index
+        self.n += 1
         self.newnodes = []
         if Node.leaf:
-            self.nodes[Node.index] = Node.children
-            self.leaves[Node.index] = True
+            self.nodes[index] = Node.children
+            self.leaves[index] = True
         else:
             for (i,label) in Node.children:
-                self.n += 1
                 self.newnodes.append((self.n,label))
-            self.nodes[parentindex] = [Node.attribute,self.newnodes]
-            self.leaves[parentindex] = False
+                self.n += 1
+            self.nodes[index] = [Node.attribute,self.newnodes]
+            self.leaves[index] = False
             #add the numeric node changer
 
     def classify(self,x):
         node = 0
         while type(self.nodes[node]) == list:
-            [attribute,labels] = self.nodes[node]
+            [attribute,labels] = self.nodes[node]   
             for (location,label) in labels:
                 if x[attribute] == label:
                     node = location
@@ -39,28 +44,26 @@ class Tree:
                 prunenode(i)
         del self.leaves[index]
         del self.nodes[index]
-        
     
     def __len__(self):
         #count nodes
         return len(self.nodes)
 
 class Node:
-    def __init__(self,attribute,labels,numeric=False):
-        self.index = 0
+    def __init__(self,attribute,labels,numeric=False,index=0):
+        self.index = index
         self.attribute = attribute
         self.leaf = False
         self.num  = numeric
         if self.num:
-            #currently using binumeric split only and -1000,1000 as lower bounds
-            self.children = [(-1000,labels),(labels,1000)]
+            #currently using binumeric split only
+            self.children = [(0,labels),(1,labels)]
         else:
             if type(labels) != list:
                 self.leaf = True
                 self.children = labels
             else:
                 self.children = [i for i in enumerate(labels)]
-        
 
     def __len__(self):
         #count
