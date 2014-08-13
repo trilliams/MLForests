@@ -15,8 +15,8 @@ class Tree:
             self.leaves[Node.index] = True
         else:
             for (i,label) in Node.children:
-                self.newnodes.append(self.n,label)
                 self.n += 1
+                self.newnodes.append((self.n,label))
             self.nodes[parentindex] = [Node.attribute,self.newnodes]
             self.leaves[parentindex] = False
             #add the numeric node changer

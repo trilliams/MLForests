@@ -20,18 +20,26 @@ def bootstrapmedian(sample,trials=1000,samplesize=10):
         values.append(np.median(bootstrapsample))
     return values
 
-def entropy(sample,attribute,labels):
-    total=0.0
+def entropy(sample,attribute,labels,target):
+    totalentropy=0.0
     #implement fractional entropy, expected value
-    for i in labels:
+    setcard = float(len(sample[attribute].dropna()))
+    targetvals = set(sample[target].dropna())
+    for label in labels:
+        currentset = sample[sample[attribute]==label]
+        pcard = float(len(currentset))
+        pentropy = 0.0
+        for val in targetvals:
+            qcard = float(len(currentset[currentset[target]==val]))
         #THIS WILL NOT WORK, IT IS ONLY RIGHT IN PRINCIPLE
         #MIGHT WORK NOW
-        p = len(sample[sample[attribute] == labels[i]])
-        if p == 0:
-            total -= 0
-        else:
-            total -= p*math.log(p,2)
-    return total
+            if qcard == 0:
+                pentropy -= 0
+            else:
+                pentropy -= qcard/pcard*math.log(qcard/pcard,2)
+        totalentropy += pcard/setcard*pentropy
+        print totalentropy
+    return totalentropy
 
 def score(guess,truth):
     right = 0
@@ -47,7 +55,6 @@ def binumsplit(sample, values, target):
     #Idea for trinumeric: iteratively move through options, only checking
     #higher options at each point.
     #Just evaluate on unique values
-    
     numbers = list(set(values))
     numbers.sort()
     #Want the midpoints of each of these values
@@ -55,8 +62,8 @@ def binumsplit(sample, values, target):
     index = -1
     minentropy = 1
     for i,number in choices:
-        p = len(filter(lambda x: x <= number,numbers))
-        q = len(numbers)-p
+        p = float(len(filter(lambda x: x <= number and x != None,values)))
+        q = len(values)-p
         if p == 0:
             total = -q*math.log(q,2)
         elif q == 0:
@@ -97,9 +104,9 @@ def nodebuilder(sample,attributes,target):
         if value!=None:
             return Node(bestattribute,value,True)
         else:
-            return Node(bestattribute,set(sample[bestattribute]))
+            return Node(bestattribute,list(set(sample[bestattribute].dropna())))
 
-def noderecurse(Tree,Node,attributes,target):
+def noderecurse(Tree,Node,sample,attributes,target):
     #should this be treebuilder?
     if not Node.leaf:
         newattributes = attributes[attributes!=Node.attribute]
@@ -107,7 +114,7 @@ def noderecurse(Tree,Node,attributes,target):
             x = nodebuilder(sample[sample[Node.attribute]==label],\
                                 newattributes,target)
             Tree.addnode(x,Node.index)
-            noderecurse(Tree,x,newattributes,target)
+            noderecurse(Tree,x,sample[sample[Node.attribute]==label],newattributes,target)
 
 
 def treebuilder(sample,attributes,target):
@@ -117,18 +124,19 @@ def treebuilder(sample,attributes,target):
     root = nodebuilder(sample,attributes,target)
     #assuming that the root won't be a leaf
     #that would signify a useless model
-    addnode(root,0)
+    t.addnode(root,0)
     attribute,labels = t.nodes[0]
     #need to keep building labels until every path ends in a leaf
     for i,label in labels:
-        noderecurse(t,root,attributes[attributes!=root.attribute],target)
+        noderecurse(t,root,sample[sample[root.attribute]==label],\
+                    attributes[attributes!=root.attribute],target)
     return t            
     
 
 def postprune(tree,validationsample):
     #time to go over the new sample and fight overfitting
     #simplest implementation: delete anything that adds no new information
-    print 'yay'
+    print "This doesn't work yet"
 
 
 def problabel(sample,target):
@@ -144,23 +152,26 @@ def problabel(sample,target):
     return maxlabel
 
 def igfinder(sample,attributes,target):
-    minindex = -1
+    #minindex = -1
     minentropy = 1
     #placeholder
-    bestattribute = attributes[0]
+    bestattribute = attributes.index[0]
+    value = None
     for i,attribute in enumerate(attributes):
-        if type(sample[attribute][0])!= str:
-            newentropy,value = binumsplit(sample,set(sample[attribute]),target)
+        if type(sample[attribute][sample[attribute].index[0]])!= str:
+            newentropy,newvalue = binumsplit(sample,\
+                                          sample[attribute].dropna(),target)
         else:
-            newentropy = entropy(sample[attribute],attribute,set(sample[attribute]))
+            newentropy = entropy(sample,attribute,\
+                                 set(sample[attribute].dropna()),target)
+            newvalue = None
+
         if newentropy < minentropy:
-            minindex = i
-            minentropy = newentropy
             bestattribute = attribute
-    if type(sample[bestattribute][0])==float or type(sample[bestattribute][0]==int):
-        return bestattribute,minentropy,value
-    else:
-        return attribute,minentropy,None
+            minentropy = newentropy
+            value = newvalue
+    return bestattribute,minentropy,value
+
     #add the numeric igfinder
 
             
