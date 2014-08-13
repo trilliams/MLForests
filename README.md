@@ -1,7 +1,7 @@
 MLForests
 =========
 Currently working for categorical variables in Python, including numerical columns with less than ten unique values.
-To build a tree, run dtrees.py and mlforests.py and then use treebuilder(sample,attributes,target), which returns a tree. For inputs, treebuilder takes a sample in the form of a Pandas DataFrame, a list of the columns you want to train on as strings, and a string of the name of target column. Run treescore(tree,sample,target) to determine the accuracy of the tree on a target sample.
+To build a tree, run dtrees.py and mlforests.py and then use treebuilder(sample,attributes,target), which returns a Tree object. For inputs, treebuilder takes a sample in the form of a Pandas DataFrame, a list of the columns you want to train on as strings, and a string of the name of target column. Run treescore(Tree,sample,target) to determine the accuracy of the tree on a target sample.
 
 Soon to come:  
   -binary inequality splitting for numerical variables  
