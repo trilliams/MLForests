@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-import random
+from random import choice
 #import matplotlib.pyplot as plt
 import math
 
@@ -8,7 +8,7 @@ def bootstrapmean(sample,trials=1000,samplesize=10):
     from numpy import mean
     values = []
     for i in range(trials):
-        bootstrapsample = [random.choice(sample) for i in range(samplesize)]
+        bootstrapsample = [choice(sample) for i in range(samplesize)]
         values.append(np.mean(bootstrapsample))
     return values
 
@@ -16,7 +16,7 @@ def bootstrapmedian(sample,trials=1000,samplesize=10):
     from numpy import median
     values = []
     for i in range(trials):
-        bootstrapsample = [random.choice(sample) for i in range(samplesize)]
+        bootstrapsample = [choice(sample) for i in range(samplesize)]
         values.append(np.median(bootstrapsample))
     return values
 
@@ -69,7 +69,8 @@ def numentropy(sample,attribute,split,target):
     over = sub[sub[attribute]>split]
     targetvals = set(sample[target])
     card = len(sample[target])
-    print split
+    #print split
+
     #compute entropy for samples under the split value
     undertotal = 0.0
     for val in targetvals:
@@ -79,7 +80,8 @@ def numentropy(sample,attribute,split,target):
             undertotal += 0
         else:
             undertotal += -(p/card)*math.log((p/card),2)
-            print undertotal
+            #print undertotal
+
     #compute entropy for samples over the split value
     overtotal= 0.0
     for val in targetvals:
@@ -89,13 +91,15 @@ def numentropy(sample,attribute,split,target):
             overtotal += 0
         else:
             overtotal += -(p/card)*math.log((p/card),2)
-            print overtotal
+            #print overtotal
+
     #combine entropies to get total entropy, want expected value
     overprop = float(len(over))/card
     underprop = float(len(under))/card
     total = overprop*overtotal + underprop*undertotal
-    print total
-    print ""
+    #prints below are for debugging
+    #print total
+    #print ""
     return total
     
 def binumsplit(sample, attribute, target):
@@ -134,7 +138,8 @@ def nodebuilder(sample,attributes,target):
         #time to build a node the old fashioned way
         #minentropy is unused
         bestattribute,minentropy,value = igfinder(sample,attributes,target)
-        if value!=None:
+        if value != None:
+            #return (bestattribute,value,True)
             return Node(bestattribute,value,True)
         else:
             return Node(bestattribute,list(set(sample[bestattribute].dropna())))
@@ -148,15 +153,28 @@ def noderecurse(Tree,Node,sample,attributes,target):
     if not Node.leaf:
         newattributes = attributes[attributes!=Node.attribute]
         attribute,children = Tree.nodes[Node.index]
-        for i,label in children:
-            x = nodebuilder(sample[sample[Node.attribute]==label],\
-                                newattributes,target)
-            #print x.attribute,x.children,x.index
-            Tree.addnode(x,i)
-            #print x.index,Tree.nodes[x.index]
-            noderecurse(Tree,x,sample[sample[Node.attribute]==label],newattributes,target)
+        if Node.num:
+            i,label = zip(*children)
+            x = nodebuilder(sample[sample[Node.attribute]<=label[0]],\
+                                    newattributes,target)
+            Tree.addnode(x,i[0])
+            noderecurse(Tree,x,sample[sample[Node.attribute]<=label[0]],newattributes,target)
+            y = nodebuilder(sample[sample[Node.attribute]>label[1]],\
+                                    newattributes,target)
+                #print x.attribute,x.children,x.index
+            Tree.addnode(y,i[1])
+            noderecurse(Tree,y,sample[sample[Node.attribute]>label[1]],newattributes,target)
+                #print x.index,Tree.nodes[x.index]
+        else:
+            for i,label in children:
+                x = nodebuilder(sample[sample[Node.attribute]==label],\
+                                    newattributes,target)
+                #print x.attribute,x.children,x.index
+                Tree.addnode(x,i)
+                #print x.index,Tree.nodes[x.index]
+                noderecurse(Tree,x,sample[sample[Node.attribute]==label],newattributes,target)
 
-def treebuilder(sample,attributes,target):
+def treebuilder(sample,attributes,target,feedback=True):
     from pandas import Series
     #Will be the general interface for constructing a decision tree
     t = Tree()
@@ -164,30 +182,77 @@ def treebuilder(sample,attributes,target):
     root = nodebuilder(sample,attributes,target)
     #assuming that the root won't be a leaf
     #that would signify a useless model
-    t.addnode(root,0)
-    attribute,labels = t.nodes[0]
+    t.addnode(root,root.index)
+    #attribute,labels = t.nodes[0]
     #need to keep building labels until every path ends in a leaf
-    noderecurse(t,root,sample,\
-                attributes[attributes!=root.attribute],target)
-    print 'List of tree nodes with their attribute and branches:'
-    print '(A single entry indicates a classifying node and its value)'
-    for i in t.nodes.keys():
-        print '%i: %s' % (i,t.nodes[i])
-    trainscore = treescore(t,sample,target)
-    print 'Tree correctly predicts %.4f of training set.' % trainscore
+    #noderecurse(t,root,sample,\
+    #            attributes[attributes!=root.attribute],target)
+    noderecurse(t,root,sample,attributes,target)
+    if feedback:
+        print 'List of tree nodes with their attribute and branches:'
+        print '(A single entry indicates a classifying node and its value)'
+        for i in t.nodes.keys():
+            print '%i: %s' % (i,t.nodes[i])
+        #trainscore = treescore(t,sample,target)
+        #print 'Tree correctly predicts %.4f of training set.' % trainscore
     return t
 
 def treescore(Tree,sample,target):
     x=sample.dropna(subset=Tree.attributes)
+    #after dropping, x, still preserves it's old indices. Have to reset these.
     #x=titanic
-    len(x)
+    x.index = range(len(x))
     answers=[]
     solutions=[]
     for i in x.index:
-        answers.append(tree.classify(titanic.ix[i]))
-        solutions.append(sample[target].ix[i])
+        answers.append(Tree.classify(x.ix[i]))
+        solutions.append(x[target].ix[i])
     return score(answers,solutions)
-    
+
+def forestbuilder(sample,attributes,target,N=1000):
+    #Builds a random forest using a the treebuilder algorithm
+    #First step, Bootstrap N samples of size n
+    #1.5: Divide bootstrapped samples into train and test sets on factor a
+    from random import choice
+    n = len(sample)
+    boots = [[sample.ix[choice(sample.index)] for i in range(n)]\
+             for j in range(N)]
+    bootdfs = [pd.DataFrame(boots[i]) for i in range(N)]
+    #Second step, create a decision tree based off of each resample
+    forest = [treebuilder(bootdfs[i],attributes,target,False) for i in range(N)]
+    #Third step, classify each sample for each tree
+    return forest
+
+def forestclassify(forest,sample):
+    results = []
+    for i in sample.index:
+        indlabels = []
+        for tree in forest:
+            t = tree.classify(sample.ix[i])
+            indlabels.append(t)
+        label = modefreq(indlabels)
+        results.append(label)
+    #Fourth step, generate results and accompanying frequencies
+    #results = [modefreq(treelabels) for treelabels in labels]
+    return results
+    #print 'Forest'
+
+def dfresample(sample):
+    from random import choice
+#    boots = [sample.ix[choice(
+
+def modefreq(sample):
+    counts = {}
+    for i in set(sample):
+        counts[i] = sample.count(i)
+    keys = counts.keys()
+    values = counts.values()
+    maxcount = max(values)
+    index = values.index(maxcount)
+    mode = keys[index]
+    freq = float(maxcount)/len(sample)
+    return mode,freq
+
 
 def postprune(Tree,validationsample):
     #time to go over the new sample and fight overfitting
@@ -216,8 +281,8 @@ def igfinder(sample,attributes,target):
         #a list of strings, we will need to find a number to split on
         if type(sample[attribute][sample[attribute].index[0]])!= str\
            and len(set(sample[attribute].dropna())) > 9:
-            newentropy,newvalue = binumsplit(sample,\
-                                          sample[attribute].dropna(),target)
+            newvalue,newentropy = binumsplit(sample,\
+                                          attribute,target)
         #otherwise, we can just use the given methodology
         else:
             newentropy = entropy(sample,attribute,\

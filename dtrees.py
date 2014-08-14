@@ -14,10 +14,12 @@ class Tree:
 
     def addnode(self,Node,index=n):
         Node.index = index
+        #basic accommodation for dealing with NA attributes
         if Node.attribute not in self.attributes:
             self.attributes.append(Node.attribute)
         self.n += 1
         self.newnodes = []
+        self.num[Node.index]=Node.num
         if Node.leaf:
             self.nodes[index] = Node.children
             self.leaves[index] = True
@@ -32,12 +34,28 @@ class Tree:
     def classify(self,x):
         node = 0
         while type(self.nodes[node]) == list:
-            [attribute,labels] = self.nodes[node]   
-            for (location,label) in labels:
-                if x[attribute] == label:
-                    node = location
+            origin = node
+            [attribute,labels] = self.nodes[node]
+            if self.num[node]:
+                #only built for binary splits, will have to generalize
+                locations,splits = zip(*labels)
+                if x[attribute] <= splits[0]:
+                    node = locations[0]
+                else:
+                    node = locations[1]
+            else:
+                for (location,label) in labels:
+                    if x[attribute] == label:
+                        node = location
+            if node == origin:
+                node = labels[0][0]
+            #if it hasn't matched, send it left. quick fix.
+            
         return self.nodes[node]
         #add the numeric classifier
+    #having a problem where sometimes nodes get into a classification they
+    #aren't qualified for and then it breaks the system. While this would
+    #be a probabilistic case, I'm not equipped to do that yet
 
     def prunenode(self,index):
         #This does not work yet
@@ -59,7 +77,7 @@ class Node:
         self.leaf = False
         self.num  = numeric
         if self.num:
-            #currently using binumeric split only
+            #currently only using binumeric split
             self.children = [(0,labels),(1,labels)]
         else:
             if type(labels) != list:
