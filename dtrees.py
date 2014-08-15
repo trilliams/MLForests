@@ -10,26 +10,32 @@ class Tree:
         self.leaves = {}
         #dictionary for determining numeric classifiers
         self.num = {}
+        self.counts = {}
+        self.locations = {}
         self.attributes = []
 
-    def addnode(self,Node,index=n):
+    def addnode(self,Node,index):
         Node.index = index
         #basic accommodation for dealing with NA attributes
         if Node.attribute not in self.attributes:
             self.attributes.append(Node.attribute)
         self.n += 1
         self.newnodes = []
+        self.newlocs = []
         self.num[Node.index]=Node.num
+        self.counts[Node.index]=Node.counts
         if Node.leaf:
             self.nodes[index] = Node.children
             self.leaves[index] = True
         else:
             for (i,label) in Node.children:
                 self.newnodes.append((self.n,label))
+                self.newlocs.append(self.n)
                 self.n += 1
             self.nodes[index] = [Node.attribute,self.newnodes]
+            self.locations[index] = self.newlocs
             self.leaves[index] = False
-            #add the numeric node changer
+
 
     def classify(self,x):
         node = 0
@@ -39,23 +45,26 @@ class Tree:
             if self.num[node]:
                 #only built for binary splits, will have to generalize
                 locations,splits = zip(*labels)
-                if x[attribute] <= splits[0]:
-                    node = locations[0]
+                if np.isnan(x[attribute]):
+                    randindex = countchoice(self.counts[node])
+                    node = self.locations[node][randindex]                
                 else:
-                    node = locations[1]
+                    if x[attribute] <= splits[0]:
+                        node = locations[0]
+                    else:
+                        node = locations[1]
             else:
                 for (location,label) in labels:
                     if x[attribute] == label:
                         node = location
+            #if the node hasn't matched, send it down a branch
+            #probabilistically
             if node == origin:
-                node = labels[0][0]
-            #if it hasn't matched, send it left. quick fix.
+                randindex = countchoice(self.counts[node])
+                node = self.locations[node][randindex]
             
         return self.nodes[node]
-        #add the numeric classifier
-    #having a problem where sometimes nodes get into a classification they
-    #aren't qualified for and then it breaks the system. While this would
-    #be a probabilistic case, I'm not equipped to do that yet
+
 
     def prunenode(self,index):
         #This does not work yet
@@ -71,11 +80,12 @@ class Tree:
         return len(self.nodes)
 
 class Node:
-    def __init__(self,attribute,labels,numeric=False,index=0):
+    def __init__(self,attribute,labels,counts=None,numeric=False,index=0):
         self.index = index
         self.attribute = attribute
         self.leaf = False
         self.num  = numeric
+        self.counts = counts
         if self.num:
             #currently only using binumeric split
             self.children = [(0,labels),(1,labels)]
@@ -87,7 +97,7 @@ class Node:
                 self.children = [i for i in enumerate(labels)]
 
     def __len__(self):
-        #count
+        #count children if it's not a leaf
         return (not self.leaf)*len(self.children)
 
 class Bootstrap:
