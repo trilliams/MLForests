@@ -208,7 +208,7 @@ def treescore(Tree,sample,target):
         solutions.append(x[target].ix[i])
     return score(answers,solutions)
 
-def forestbuilder(sample,attributes,target,N=1000):
+def forestbuilder(sample,attributes,target,N=10):
     #Builds a random forest using a the treebuilder algorithm
     #First step, Bootstrap N samples of size n
     #1.5: Divide bootstrapped samples into sets for cross-validation
@@ -221,6 +221,32 @@ def forestbuilder(sample,attributes,target,N=1000):
     forest = [treebuilder(bootdfs[i],attributes,target,False) for i in range(N)]
     #Third step, classify each sample for each tree
     return forest
+
+def forestiter(sample,attributes,target,N=1000):
+    n = len(sample)
+    straps = N
+    guesslist = []
+    #builds ten forests at a time, classifies through them, and then resets
+    while straps >= 10:
+        straps -= 10
+        forest = forestbuilder(sample,attributes,target,N=10)
+        guesslist.append(treeiter(forest,sample))
+    #after while
+    if straps != 0:
+        forest = forestbuilder(sample,attributes,target,straps)
+        guesslist.append(treeiter(forest,sample))
+    results = [modefreq(guesses) for guesses in guesslist]
+    return results
+    
+def treeiter(forest,sample):    
+    labels = []
+    for i in sample.index:
+        indlabels = []
+        for tree in forest:
+            t = tree.classify(sample.ix[i])
+            indlabels.append(t)
+        label.append(indlabels)
+    return labels  
 
 def forestclassify(forest,sample):
     results = []
@@ -279,11 +305,18 @@ def igfinder(sample,attributes,target):
     for i,attribute in enumerate(attributes):
         #if the variable is not a binary, small group, or
         #a list of strings, we will need to find a number to split on
-        if type(sample[attribute][sample[attribute].index[0]])!= str\
-           and len(set(sample[attribute].dropna())) > 9:
+        if type(sample[attribute][sample[attribute].index[0]])!= str:
+        #old option below
+        #if type(sample[attribute][sample[attribute].index[0]])!= str\
+        #   and len(set(sample[attribute].dropna())) > 9:
             newvalue,newentropy,newcounts = binumsplit(sample,\
                                           attribute,target)
-        #otherwise, we can just use the given methodology
+            if newentropy < minentropy:
+                bestattribute = attribute
+                minentropy = newentropy
+                counts = newcounts
+                value = newvalue            
+        #otherwise, we just use the given methodology
         else:
             newentropy,newcounts = entropy(sample,attribute,\
                                  set(sample[attribute].dropna()),target)
@@ -297,15 +330,18 @@ def igfinder(sample,attributes,target):
 
 
 def countchoice(counts):
+    #temporary fix
     #returns the index of a list according to the weights
-    total = sum(w for w in counts)
-    r = random.uniform(0, total)
-    upto = 0
-    index = 0
-    for w in counts:
-        upto += w
-        if upto > r:
-            return index
-        index += 1          
-    
+    if type(counts) == int:
+        return 0
+    else:
+        total = sum(w for w in counts)
+        r = random.uniform(0, total)
+        upto = 0
+        index = 0
+        for w in counts:
+            upto += w
+            if upto > r:
+                return index
+            index += 1          
     
