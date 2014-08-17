@@ -12,6 +12,7 @@ class Tree:
         self.num = {}
         self.counts = {}
         self.locations = {}
+        self.problabels = {}
         self.attributes = []
 
     def addnode(self,Node,index):
@@ -24,6 +25,7 @@ class Tree:
         self.newlocs = []
         self.num[Node.index]=Node.num
         self.counts[Node.index]=Node.counts
+        self.problabels[Node.index]=Node.problabel
         if Node.leaf:
             self.nodes[index] = Node.children
             self.leaves[index] = True
@@ -62,30 +64,34 @@ class Tree:
             if node == origin:
                 randindex = countchoice(self.counts[node])
                 node = self.locations[node][randindex]
-            
+        #afterwards, enter the label of the final node
         return self.nodes[node]
 
 
-    def prunenode(self,index):
+    def prune(self,index):
         #This does not work yet
         if not self.leaves[index]:
             attribute,labels = self.nodes[index]
             for (i,label) in labels:
-                prunenode(i)
-        del self.leaves[index]
-        del self.nodes[index]
+                self.prune(i)
+            self.leaves[index] = True
+            self.nodes[index] = self.problabels[index]
+        #next line for debugging
+        #print 'prune complete'
+        #print self.leaves
     
     def __len__(self):
         #count nodes
         return len(self.nodes)
 
 class Node:
-    def __init__(self,attribute,labels,counts=None,numeric=False,index=0):
+    def __init__(self,attribute,labels,prob,counts=None,numeric=False,index=0):
         self.index = index
         self.attribute = attribute
         self.leaf = False
         self.num  = numeric
         self.counts = counts
+        self.problabel = prob
         if self.num:
             #currently only using binumeric split
             self.children = [(0,labels),(1,labels)]
