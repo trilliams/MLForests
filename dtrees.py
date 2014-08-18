@@ -10,13 +10,9 @@ class Tree:
         self.leaves = {}
         #dictionary for determining numeric classifiers
         self.num = {}
-        #dictionary for weights at each node
         self.counts = {}
-        #dictionary for locations of each node
         self.locations = {}
-        #dictionary of labels for if a node becomes a leaf
         self.problabels = {}
-        #list of attributes that the tree splits on
         self.attributes = []
 
     def addnode(self,Node,index):
@@ -30,12 +26,10 @@ class Tree:
         self.num[Node.index]=Node.num
         self.counts[Node.index]=Node.counts
         self.problabels[Node.index]=Node.problabel
-        #if a node is a leaf, we store its classifier value
         if Node.leaf:
             self.nodes[index] = Node.children
             self.leaves[index] = True
         else:
-            #if a node has children, we assign the new locations
             for (i,label) in Node.children:
                 self.newnodes.append((self.n,label))
                 self.newlocs.append(self.n)
@@ -51,7 +45,7 @@ class Tree:
             origin = node
             [attribute,labels] = self.nodes[node]
             if self.num[node]:
-                #only built for binary splits, will have to generalize if bigger
+                #only built for binary splits, will have to generalize
                 locations,splits = zip(*labels)
                 if np.isnan(x[attribute]):
                     randindex = countchoice(self.counts[node])
@@ -75,13 +69,16 @@ class Tree:
 
 
     def prune(self,index):
-        #Recursive tree pruner, prunes node and all nodes below it
+        #This does not work yet
         if not self.leaves[index]:
             attribute,labels = self.nodes[index]
             for (i,label) in labels:
                 self.prune(i)
             self.leaves[index] = True
             self.nodes[index] = self.problabels[index]
+        #next line for debugging
+        #print 'prune complete'
+        #print self.leaves
     
     def __len__(self):
         #count nodes
@@ -108,3 +105,38 @@ class Node:
     def __len__(self):
         #count children if it's not a leaf
         return (not self.leaf)*len(self.children)
+
+class Bootstrap:
+    def __init__(self,sample):
+        N = 1000
+        n = len(sample)
+        self.bootstraps = []
+        for i in range(N):
+            self.bootstraps.append([choice(sample) for i in range(n)])
+
+    def __len__(self):
+        return len(self.bootstraps)
+
+    def __repr__(self):
+        return '%i bootstraps of %i samples' %\
+               (len(self.bootstraps),len(self.bootstraps[0]))
+
+    def size(self):
+        print len(self.bootstraps),'bootstraps of',\
+              len(self.bootstraps[0]),'samples'
+
+    def mean(self):
+        means = [mean(self.bootstraps[i]) for i \
+                 in range(len(self.bootstraps))]
+        return means
+    
+    def median(self):
+        medians = [mean(self.bootstraps[i]) for \
+                   i in range(len(self.bootstraps))]
+        return medians
+
+
+        
+
+    
+            

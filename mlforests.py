@@ -4,173 +4,28 @@ import random
 import math
 from copy import deepcopy
 
-################# RANDOM FOREST CLASSIFIER ##################
-
-def rfclassifier(sample,testsample,attributes,target,\
-                 N=1000,alpha=0.30,prune=True,n=False):
-    ##Iteratively builds a random forest on sample and classifies test sample
-    if not n:
-        n = len(sample)
-    testn = len(testsample)
-    straps = N
-    guessdict = {}
-    for i in range(testn):
-        guessdict[i] = []
-    #builds ten forests at a time, classifies through them, and then resets
-    while straps >= 10:
-        straps -= 10
-        forest = forestbuilder(sample,attributes,target,\
-                               N=10,alpha=alpha,prune=prune,n=n)
-        guesses = treeiter(forest,testsample)
-        for i in range(testn):
-            guessdict[i] += guesses[i]
-        del forest
-    #after while
-    if straps != 0:
-        forest = forestbuilder(sample,attributes,target,\
-                               N=straps,alpha=alpha,prune=prune,n=n)
-        guesses = treeiter(forest,testsample)
-        for i in range(testn):
-            guessdict[i] += guesses[i]
-        del forest
-    results = [modefreq(guessdict[guesses]) for guesses in guessdict]
-    return results
-
-################# FOREST FUNCTIONS ##################
-
-def forestbuilder(sample,attributes,target,N=10,alpha=.30,prune=True,n=False):
-    ##Builds a random forest using a the treebuilder algorithm
-    #alpha determines what percentage of the bootstrapped sample is
-    #used for validation set.
-    #if prune is set to false, postpruning and cross-validation are off.
-    #1: Bootstrap N samples of size n, defaults to length of sample
-    if not n:
-        n = len(sample)
-    #need to reset index for each bootstrap to avoid duplicate indices
-    boots = [[sample.ix[random.choice(sample.index)] for i in range(n)]\
-             for j in range(N)]
-    bootdfs = [pd.DataFrame(boots[i],index=range(n)) for i in range(N)]
-    #2a.1: Divide bootstrapped samples into sets for cross-validation
-    if prune:
-        traindfs = [bootdfs[i][0:int(n*(1-alpha))] for i in range(N)]
-        valdfs   = [bootdfs[i][int(n*(1-alpha)+1)::] for i in range(N)]
-        #2a.2: create a decision tree based off of each resample
-        forest = [treebuilder(traindfs[i],attributes,target,False)\
-                  for i in range(N)]
-        #2a.3: postprune each tree using the validation data
-        for i in range(N):
-            postprune(forest[i],valdfs[i],target)
-    #2b: create a decision tree based off of each resample
-    else:
-        forest = [treebuilder(bootdfs[i],attributes,target,False)\
-                  for i in range(N)]
-    #3: output tree
-    return forest
-
-def forestiter(sample,attributes,target,N=1000,n=False):
-    ##Iterative forest builder to save memory
-    if not n:
-        n = len(sample)
-    straps = N
-    guessdict = {}
-    for i in range(n):
-        guessdict[i] = []
-    #builds ten forests at a time, classifies through them, and then resets
-    while straps >= 10:
-        straps -= 10
-        forest = forestbuilder(sample,attributes,target,N=10)
-        guesses = treeiter(forest,sample)
-        for i in range(n):
-            guessdict[i] += guesses[i]
-        del forest
-    #after less than ten to go, we make the remainder
-    if straps != 0:
-        forest = forestbuilder(sample,attributes,target,N=straps)
-        for i in range(n):
-            guessdict[i] += guesses[i]
-        del forest
-    #once we have all of our logged guesses, we find their modes
-    results = [modefreq(guessdict[guesses]) for guesses in guessdict]
-    return results
-
-def forestclassify(forest,sample):
-    ##Takes a forest and returns guesses for each point in a sample
-    results = []
-    for i in sample.index:
-        indlabels = []
-        for tree in forest:
-            t = tree.classify(sample.ix[i])
-            indlabels.append(t)
-        label = modefreq(indlabels)
-        results.append(label)
-    return results
-
-################# TREE FUNCTIONS ##################
-
-def treebuilder(sample,attributes,target,feedback=True):
-    ##General interface for constructing a decision tree
-    t = Tree()
-    attributes = pd.Series(attributes)
-    root = nodebuilder(sample,attributes,target)
-    #assuming that the root won't be a leaf
-    #that would signify a useless model
-    t.addnode(root,root.index)
-    #need to keep building labels until every path ends in a leaf
-    noderecurse(t,root,sample,attributes,target)
-    #returns basic info about the tree if desired
-    if feedback:
-        print 'List of tree nodes with their attribute and branches:'
-        print '(A single entry indicates a classifying node and its value)'
-        for i in t.nodes.keys():
-            print '%i: %s' % (i,t.nodes[i])
-        trainscore = treescore(t,sample,target)
-        print 'Tree correctly predicts %.4f of training set.' % trainscore
-    return t
-
-def treeiter(forest,sample):    
-    ##Iteratively classifies a sample a point at a time through the forest
-    labels = []
-    for i in sample.index:
-        indlabels = []
-        for tree in forest:
-            t = tree.classify(sample.ix[i])
-            indlabels.append(t)
-        labels.append(indlabels)
-    return labels
-
-def postprune(Tree,validationsample,target):
-    ##Prunes the tree by testing its performance against a validation set
-    #goes over the new sample and fight overfitting
-    #simplest implementation: delete anything that adds no new information
-    basescore = treescore(Tree,validationsample,target)
-    while True:
-        #Go through leaf nodes from the bottom up
-        leaves = [leaf for leaf in Tree.leaves if Tree.leaves[leaf]]
-        for leaf in leaves[::-1]:
-            Tree2 = deepcopy(Tree)
-            Tree2.prune(leaf)
-            newscore = treescore(Tree2,validationsample,target)
-            if newscore < basescore:
-                Tree = Tree2
-                basescore = newscore
-                break
-        #if we go through all leaves in any iteration and don't prune, that's it
-        break
-
-def treescore(Tree,sample,target):
-    ##Simple function for scoring a tree's predictions against the target value
-    x = sample
-    x.index = range(len(x))
-    answers=[]
-    solutions=[]
-    for i in x.index:
-        answers.append(Tree.classify(x.ix[i]))
-        solutions.append(x[target].ix[i])
-    return score(answers,solutions)
-
+def entropy(sample,attribute,labels,target):
+    totalentropy=0.0
+    setcard = float(len(sample[attribute].dropna()))
+    targetvals = set(sample[target].dropna())
+    counts = []
+    for label in labels:
+        currentset = sample[sample[attribute]==label]
+        pcard = float(len(currentset))
+        counts.append(pcard)
+        pentropy = 0.0
+        for val in targetvals:
+            qcard = float(len(currentset[currentset[target]==val]))
+            if qcard == 0:
+                pentropy -= 0
+            else:
+                pentropy -= qcard/pcard*math.log(qcard/pcard,2)
+        totalentropy += pcard/setcard*pentropy
+        #uncomment below for debugging
+        #print totalentropy
+    return totalentropy,counts
 
 def score(guess,truth):
-    ##General scoring function, tells you the percent of values that are equal
     right = 0
     total = len(truth)
     for i in range(total):
@@ -178,114 +33,51 @@ def score(guess,truth):
             right += 1
     return float(right)/total
 
-################# NODE-BUILDING FUNCTIONS ##################
-
-def nodebuilder(sample,attributes,target):
-    ##Builds a node from current sample, attributes, and target.
-    prob = problabel(sample,target)
-    #check to see if there are attributes left
-    if len(attributes) == 0:
-        #probabilistically assign target value as leaf classifier
-        label = prob
-        return Node(target,label,prob)
-    #check to see if all points have the same target value
-    elif len(set(sample[target])) == 1:
-        #return leaf with classifier as this target value
-        label = sample[target].ix[sample[target].index[0]]
-        return Node(target,label,prob)
-    #after checking the base cases, build a traditional node
-    else:
-        #find the vitals of the new node through igfinder
-        #minentropy is unused here
-        bestattribute,minentropy,value,counts = \
-                                            igfinder(sample,attributes,target)
-        #if igfinder returned a value, we have a binary numeric split
-        if value != None:
-            return Node(bestattribute,value,prob,counts,True)
-        #if it did not, we have a categorical split
+def numentropy(sample,attribute,split,target):
+    ##computes entropy for splits on numeric values
+    sub = sample.dropna(subset=[attribute])
+    under = sub[sub[attribute]<=split]
+    over = sub[sub[attribute]>split]
+    targetvals = set(sample[target])
+    card = len(sample[target])
+    counts = (len(under),len(over))
+    
+    #compute entropy for samples under the split value
+    undertotal = 0.0
+    for val in targetvals:
+        matches = under[under[target]==val]
+        p = float(len(matches))
+        if p == 0:
+            undertotal += 0
         else:
-            return Node(bestattribute,\
-                        list(set(sample[bestattribute].dropna())),prob,counts)
-
-
-def noderecurse(Tree,Node,sample,attributes,target):
-    ##Given a starting node and data set, this will build a tree.
-    #if a node is a leaf, no need to recurse
-    if not Node.leaf:
-        #remove the attribute 
-        newattributes = attributes[attributes!=Node.attribute]
-        attribute,children = Tree.nodes[Node.index]
-        #if the node is numerically split, we need to make two groups
-        if Node.num:
-            #get two samples with values under and over the split, respectively
-            under,over = numnancleaner(Node,sample)
-            i,label = zip(*children)
-            #build the samples of values under the split
-            x = nodebuilder(under,newattributes,target)
-            Tree.addnode(x,i[0])
-            noderecurse(Tree,x,under,newattributes,target)
-            #build the samples of values over the split
-            y = nodebuilder(over,newattributes,target)
-            Tree.addnode(y,i[1])
-            noderecurse(Tree,y,over,newattributes,target)
-        #if the node is categorically split, we need a group for each label    
+            undertotal += -(p/card)*math.log((p/card),2)
+            
+    #compute entropy for samples over the split value
+    overtotal= 0.0
+    for val in targetvals:
+        matches = over[over[target]==val]
+        p = float(len(matches))
+        if p == 0:
+            overtotal += 0
         else:
-            #probabilistically assign labels to points missing the label
-            listnancleaner(Node,sample)
-            #build a node for each label
-            for i,label in children:
-                x = nodebuilder(sample[sample[Node.attribute]==label],\
-                                    newattributes,target)
-                Tree.addnode(x,i)
-                noderecurse(Tree,x,sample[sample[Node.attribute]==label],\
-                            newattributes,target)
-
-def igfinder(sample,attributes,target):
-    ##Function to find the attribute of a sample that will return the
-    ##largest information gain by splitting on it
-    #initiate a dummy minimum entropy, start with the first attribute
-    minentropy = 1
-    bestattribute = attributes.ix[attributes.index[0]]
-    value = None
-    counts = (1)
-    for i,attribute in enumerate(attributes):
-        #if the attribute is purely numeric and it has a
-        #large range of values, we will run numeric split.
-        if (type(sample.dtypes[attribute]) == np.float64 \
-           or type(sample.dtypes[attribute]) == np.int64) \
-           and len(set(sample[attribute].dropna())) > 5:
-            newvalue,newentropy,newcounts = \
-                                    binumsplit(sample,attribute,target)
-            #if this produces a lower current entropy, use these values
-            if newentropy < minentropy:
-                bestattribute = attribute
-                minentropy = newentropy
-                counts = newcounts
-                value = newvalue            
-        #for any other attribute, we run the old methodology
-        else:
-            newentropy,newcounts = entropy(sample,attribute,\
-                                 set(sample[attribute].dropna()),target)
-            newvalue = None
-        #if this produces a lower current entropy, use these values
-        if newentropy < minentropy:
-            bestattribute = attribute
-            minentropy = newentropy
-            counts = newcounts
-            value = newvalue
-    return bestattribute,minentropy,value,counts
-
-################# ENTROPY FINDING FUNCTIONS ##################
-
+            overtotal += -(p/card)*math.log((p/card),2)
+            
+    #combine entropies to get total entropy, want expected value
+    overprop = float(len(over))/card
+    underprop = float(len(under))/card
+    total = overprop*overtotal + underprop*undertotal
+    return total,counts
+    
 def binumsplit(sample, attribute, target):
-    ## Finds the best value to split a numeric column on,
-    ## just evaluates on unique values.
+    ##Finds the best value to split a numeric column on.
+    ##Just evaluates on unique values.
     targetvals = target
     values = sample[attribute].dropna()
     numbers = list(set(values))
     numbers.sort()
     counts = 0
-    # use the midpoints of each of these values
+
+    #Want the midpoints of each of these values
     splits = [(i,float(numbers[i] + numbers[i+1])/2) \
               for i in range(len(numbers)-1)]
     bestsplit = None
@@ -296,63 +88,30 @@ def binumsplit(sample, attribute, target):
             bestsplit = split
             minentropy = total
             counts = newcounts
-    return bestsplit, minentropy, counts
+    return bestsplit, minentropy,  counts
 
-def numentropy(sample,attribute,split,target):
-    ## Computes entropy for splits on numeric values
-    sub = sample.dropna(subset=[attribute])
-    under = sub[sub[attribute]<=split]
-    over = sub[sub[attribute]>split]
-    targetvals = set(sample[target])
-    card = len(sample[target])
-    counts = (len(under),len(over))
-    #compute entropy for samples under the split value
-    undertotal = 0.0
-    for val in targetvals:
-        matches = under[under[target]==val]
-        p = float(len(matches))
-        if p == 0:
-            undertotal += 0
+def nodebuilder(sample,attributes,target):
+    ##Builds a node from current sample, attributes, and target.
+    prob = problabel(sample,target)
+    if len(attributes) == 0:
+        #probabilistically assign target value as leaf classifier
+        label = prob
+        return Node(target,label,prob)
+    elif len(set(sample[target])) == 1:
+        #return leaf with classifier as this target value
+        label = sample[target].ix[sample[target].index[0]]
+        return Node(target,label,prob)
+    else:
+        #time to build a node the old fashioned way
+        #minentropy is unused
+        bestattribute,minentropy,value,counts = \
+                                            igfinder(sample,attributes,target)
+        if value != None:
+            #return (bestattribute,value,True)
+            return Node(bestattribute,value,prob,counts,True)
         else:
-            undertotal += -(p/card)*math.log((p/card),2)    
-    #compute entropy for samples over the split value
-    overtotal= 0.0
-    for val in targetvals:
-        matches = over[over[target]==val]
-        p = float(len(matches))
-        if p == 0:
-            overtotal += 0
-        else:
-            overtotal += -(p/card)*math.log((p/card),2)      
-    #combine entropies to get total entropy, want expected value
-    overprop = float(len(over))/card
-    underprop = float(len(under))/card
-    total = overprop*overtotal + underprop*undertotal
-    return total,counts
-
-def entropy(sample,attribute,labels,target):
-    ##Compute expected entropy for a node split on 'attribute'
-    totalentropy=0.0
-    setcard = float(len(sample[attribute].dropna()))
-    targetvals = set(sample[target].dropna())
-    counts = []
-    #separate sample by labels
-    for label in labels:
-        currentset = sample[sample[attribute]==label]
-        pcard = float(len(currentset))
-        counts.append(pcard)
-        pentropy = 0.0
-        #compute entropy for each individual branch
-        for val in targetvals:
-            qcard = float(len(currentset[currentset[target]==val]))
-            if qcard == 0:
-                pentropy -= 0
-            else:
-                pentropy -= qcard/pcard*math.log(qcard/pcard,2)
-        totalentropy += pcard/setcard*pentropy
-    return totalentropy,counts
-
-################# NAN CLEANING FUNCTIONS ##################
+            return Node(bestattribute,\
+                        list(set(sample[bestattribute].dropna())),prob,counts)
 
 def numnancleaner(Node,sample):
     ##Resolves nans for numeric variables
@@ -385,8 +144,201 @@ def listnancleaner(Node,sample):
             choice = countchoice(weights)
             sample[attribute][index] = labels[choice]
 
+def noderecurse(Tree,Node,sample,attributes,target):
+    #Given a starting node and data set, this will build a tree.
+    if not Node.leaf:
+        newattributes = attributes[attributes!=Node.attribute]
+        attribute,children = Tree.nodes[Node.index]
+        if Node.num:
+            under,over = numnancleaner(Node,sample)
+            i,label = zip(*children)
+            x = nodebuilder(under,newattributes,target)
+            Tree.addnode(x,i[0])
+            noderecurse(Tree,x,under,newattributes,target)
+            y = nodebuilder(over,newattributes,target)
+                #print x.attribute,x.children,x.index
+            Tree.addnode(y,i[1])
+            noderecurse(Tree,y,over,newattributes,target)
+                #print x.index,Tree.nodes[x.index]
+        else:
+            listnancleaner(Node,sample)
+            for i,label in children:
+                x = nodebuilder(sample[sample[Node.attribute]==label],\
+                                    newattributes,target)
+                #print x.attribute,x.children,x.index
+                Tree.addnode(x,i)
+                #print x.index,Tree.nodes[x.index]
+                noderecurse(Tree,x,sample[sample[Node.attribute]==label],newattributes,target)
+
+def treebuilder(sample,attributes,target,feedback=True):
+    from pandas import Series
+    #General interface for constructing a decision tree
+    t = Tree()
+    attributes = Series(attributes)
+    root = nodebuilder(sample,attributes,target)
+    #assuming that the root won't be a leaf
+    #that would signify a useless model
+    t.addnode(root,root.index)
+    #need to keep building labels until every path ends in a leaf
+    noderecurse(t,root,sample,attributes,target)
+    if feedback:
+        print 'List of tree nodes with their attribute and branches:'
+        print '(A single entry indicates a classifying node and its value)'
+        for i in t.nodes.keys():
+            print '%i: %s' % (i,t.nodes[i])
+        trainscore = treescore(t,sample,target)
+        print 'Tree correctly predicts %.4f of training set.' % trainscore
+    return t
+
+def treescore(Tree,sample,target):
+    x = sample
+    x.index = range(len(x))
+    answers=[]
+    solutions=[]
+    for i in x.index:
+        answers.append(Tree.classify(x.ix[i]))
+        solutions.append(x[target].ix[i])
+    return score(answers,solutions)
+
+def forestbuilder(sample,attributes,target,N=10,alpha=.30,prune=True):
+    #Builds a random forest using a the treebuilder algorithm
+    #alpha determines what percentage of the bootstrapped sample is
+    #used for validation set.
+    #if prune is set to false, postpruning and cross-validation are off.
+    #1: Bootstrap N samples of size n
+    n = len(sample)
+    #1.25: Reset index for each bootstrap
+    boots = [[sample.ix[random.choice(sample.index)] for i in range(n)]\
+             for j in range(N)]
+    bootdfs = [pd.DataFrame(boots[i],index=range(n)) for i in range(N)]
+    #2a.1: Divide bootstrapped samples into sets for cross-validation
+    if prune:
+        traindfs = [bootdfs[i][0:int(n*(1-alpha))] for i in range(N)]
+        valdfs   = [bootdfs[i][int(n*(1-alpha)+1)::] for i in range(N)]
+        #2a.2: create a decision tree based off of each resample
+        forest = [treebuilder(traindfs[i],attributes,target,False)\
+                  for i in range(N)]
+        #2a.3: postprune each tree using the validation data
+        for i in range(N):
+            postprune(forest[i],valdfs[i],target)
+    #2b: create a decision tree based off of each resample
+    else:
+        forest = [treebuilder(bootdfs[i],attributes,target,False)\
+                  for i in range(N)]
+    #3: output tree
+    return forest
+
+def forestiter(sample,attributes,target,N=1000):
+    n = len(sample)
+    straps = N
+    guessdict = {}
+    for i in range(n):
+        guessdict[i] = []
+    #builds ten forests at a time, classifies through them, and then resets
+    while straps >= 10:
+        straps -= 10
+        forest = forestbuilder(sample,attributes,target,N=10)
+        guesses = treeiter(forest,sample)
+        for i in range(n):
+            guessdict[i] += guesses[i]
+        del forest
+    #after while
+    if straps != 0:
+        forest = forestbuilder(sample,attributes,target,N=straps)
+        for i in range(n):
+            guessdict[i] += guesses[i]
+        del forest
+    results = [modefreq(guessdict[guesses]) for guesses in guessdict]
+    return results
+
+def rfclassifier(sample,testsample,attributes,target,N=1000):
+    ##iteratively builds a random forest on sample and classifies test sample
+    n = len(sample)
+    testn = len(testsample)
+    straps = N
+    guessdict = {}
+    for i in range(testn):
+        guessdict[i] = []
+    #builds ten forests at a time, classifies through them, and then resets
+    while straps >= 10:
+        straps -= 10
+        forest = forestbuilder(sample,attributes,target,N=10)
+        guesses = treeiter(forest,testsample)
+        for i in range(testn):
+            guessdict[i] += guesses[i]
+        del forest
+    #after while
+    if straps != 0:
+        forest = forestbuilder(sample,attributes,target,N=straps)
+        guesses = treeiter(forest,testsample)
+        for i in range(testn):
+            guessdict[i] += guesses[i]
+        del forest
+    results = [modefreq(guessdict[guesses]) for guesses in guessdict]
+    return results
+    
+def treeiter(forest,sample):    
+    labels = []
+    for i in sample.index:
+        indlabels = []
+        for tree in forest:
+            t = tree.classify(sample.ix[i])
+            indlabels.append(t)
+        labels.append(indlabels)
+    return labels  
+
+def forestclassify(forest,sample):
+    results = []
+    for i in sample.index:
+        indlabels = []
+        for tree in forest:
+            t = tree.classify(sample.ix[i])
+            indlabels.append(t)
+        label = modefreq(indlabels)
+        results.append(label)
+    #Fourth step, generate results and accompanying frequencies
+    #results = [modefreq(treelabels) for treelabels in labels]
+    return results
+    #print 'Forest'
+
+def dfresample(sample):
+    from random import choice
+#    boots = [sample.ix[choice(
+
+def modefreq(sample):
+    counts = {}
+    for i in set(sample):
+        counts[i] = sample.count(i)
+    keys = counts.keys()
+    values = counts.values()
+    maxcount = max(values)
+    index = values.index(maxcount)
+    mode = keys[index]
+    freq = float(maxcount)/len(sample)
+    return mode,freq
+
+
+def postprune(Tree,validationsample,target):
+    #time to go over the new sample and fight overfitting
+    #simplest implementation: delete anything that adds no new information
+    basescore = treescore(Tree,validationsample,target)
+    while True:
+        #Go through leaf nodes from the bottom up
+        leaves = [leaf for leaf in Tree.leaves if Tree.leaves[leaf]]
+        for leaf in leaves[::-1]:
+            Tree2 = deepcopy(Tree)
+            Tree2.prune(leaf)
+            newscore = treescore(Tree2,validationsample,target)
+            if newscore < basescore:
+                Tree = Tree2
+                basescore = newscore
+                break
+        #if we go through all leaves in any iteration and don't prune, that's it
+        break
+    #print basescore        
+
+
 def problabel(sample,target):
-    ##Finds the most common target value of a sample
     maximum = -1
     maxlabel = ''
     for label in set(sample[target]):
@@ -398,8 +350,41 @@ def problabel(sample,target):
             maxlabel = label
     return maxlabel
 
+def igfinder(sample,attributes,target):
+    minentropy = 1
+    bestattribute = attributes.ix[attributes.index[0]]
+    value = None
+    counts = (1)
+    for i,attribute in enumerate(attributes):
+        #if the variable is not a binary, small group, or
+        #a list of strings, we will need to find a number to split on
+        if type(sample[attribute][sample[attribute].index[0]])!= str:
+        #old option below
+        #if type(sample[attribute][sample[attribute].index[0]])!= str\
+        #   and len(set(sample[attribute].dropna())) > 9:
+            newvalue,newentropy,newcounts = binumsplit(sample,\
+                                          attribute,target)
+            if newentropy < minentropy:
+                bestattribute = attribute
+                minentropy = newentropy
+                counts = newcounts
+                value = newvalue            
+        #otherwise, we just use the given methodology
+        else:
+            newentropy,newcounts = entropy(sample,attribute,\
+                                 set(sample[attribute].dropna()),target)
+            newvalue = None
+        if newentropy < minentropy:
+            bestattribute = attribute
+            minentropy = newentropy
+            counts = newcounts
+            value = newvalue
+    return bestattribute,minentropy,value,counts
+
+
 def countchoice(counts):
-    ##Returns the index of a list, chosen according to weights
+    #temporary fix
+    #returns the index of a list according to the weights
     if type(counts) == int:
         return 0
     else:
@@ -411,38 +396,5 @@ def countchoice(counts):
             upto += w
             if upto > r:
                 return index
-            index += 1     
-
-################# GENERAL ML TOOLS ##################
-
-def splitframe(dataframe,percentinfirstframe=0.50):
-    ##Splits a data frame in two.
-    from random import sample
-    #Need to make sure percent is a valid number
-    if not (percentinfirstframe >=0 and percentinfirstframe <=1):
-        assert False, 'Percent must be a number in [0,1]'
-    n = len(dataframe)
-    trainsize = int(n*percentinfirstframe)
-    testsize = n - trainsize
-    trains = random.sample(dataframe.index,trainsize)
-    tests = [i for i in dataframe.index if i not in trains]
-    traindata = [dataframe.ix[i] for i in trains]
-    traindf = pd.DataFrame(traindata,index=range(trainsize))
-    testdata = [dataframe.ix[i] for i in tests]
-    testdf = pd.DataFrame(testdata,index=range(testsize))
-    print 'First data frame has %i samples, second has %i.' % (trainsize,testsize)
-    return traindf,testdf
-
-def modefreq(sample):
-    ##Returns the mode of a sample and the frequency of said mode
-    counts = {}
-    for i in set(sample):
-        counts[i] = sample.count(i)
-    keys = counts.keys()
-    values = counts.values()
-    maxcount = max(values)
-    index = values.index(maxcount)
-    mode = keys[index]
-    freq = float(maxcount)/len(sample)
-    return mode,freq     
+            index += 1          
     
