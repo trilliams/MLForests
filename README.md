@@ -14,4 +14,5 @@ Soon to come:
 Summary:  
 MLForests is a hard-coded program for creating random forests from a Pandas dataframe, written solely by Tristan Williams. It was created to be both an exercise to refine my Python skills and a more customizable decision tree interface for statistical classification. It will be continuously updated, with the end goal of being an error-robust classifying algorithm for use in data science. dtrees is an object class containing Tree and Node for building a decision tree, while mlforests contains the functions necessary to bootstrap a sample from a Pandas dataframe and construct a random forest classifier from it.
 
-
+Dependencies:  
+Pandas, Numpy
