@@ -19,7 +19,7 @@ class Tree:
         #list of attributes that the tree splits on
         self.attributes = []
 
-    def addnode(self,Node,index):
+    def addnode(self, Node, index):
         Node.index = index
         #basic accommodation for dealing with NA attributes
         if Node.attribute not in self.attributes:
@@ -37,22 +37,22 @@ class Tree:
         else:
             #if a node has children, we assign the new locations
             for (i,label) in Node.children:
-                self.newnodes.append((self.n,label))
+                self.newnodes.append((self.n, label))
                 self.newlocs.append(self.n)
                 self.n += 1
-            self.nodes[index] = [Node.attribute,self.newnodes]
+            self.nodes[index] = [Node.attribute, self.newnodes]
             self.locations[index] = self.newlocs
             self.leaves[index] = False
 
 
-    def classify(self,x):
+    def classify(self, x):
         node = 0
         while type(self.nodes[node]) == list:
             origin = node
-            [attribute,labels] = self.nodes[node]
+            [attribute, labels] = self.nodes[node]
             if self.num[node]:
                 #only built for binary splits, will have to generalize if bigger
-                locations,splits = zip(*labels)
+                locations, splits = zip(*labels)
                 if np.isnan(x[attribute]):
                     randindex = countchoice(self.counts[node])
                     node = self.locations[node][randindex]                
@@ -74,11 +74,11 @@ class Tree:
         return self.nodes[node]
 
 
-    def prune(self,index):
+    def prune(self, index):
         #Recursive tree pruner, prunes node and all nodes below it
         if not self.leaves[index]:
-            attribute,labels = self.nodes[index]
-            for (i,label) in labels:
+            attribute, labels = self.nodes[index]
+            for (i, label) in labels:
                 self.prune(i)
             self.leaves[index] = True
             self.nodes[index] = self.problabels[index]
@@ -88,7 +88,7 @@ class Tree:
         return len(self.nodes)
 
 class Node:
-    def __init__(self,attribute,labels,prob,counts=None,numeric=False,index=0):
+    def __init__(self, attribute, labels, prob, counts=None, numeric=False, index=0):
         self.index = index
         self.attribute = attribute
         self.leaf = False
@@ -97,7 +97,7 @@ class Node:
         self.problabel = prob
         if self.num:
             #currently only using binumeric split
-            self.children = [(0,labels),(1,labels)]
+            self.children = [(0, labels), (1, labels)]
         else:
             if type(labels) != list:
                 self.leaf = True
